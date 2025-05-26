@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guia de Serviços do Condomínio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Visualization & Content Choices: 
+        - Report Info: Table of service providers. Goal: Inform, Compare, Organize, Collect User Input. Viz/Presentation: Interactive list of cards (HTML/Tailwind + JS). Interaction: Live search, dropdown filtering, modal forms for add/delete confirmation, collapsible comment sections, dynamic combobox for service categories. Justification: Efficient information retrieval and collaborative data entry, improved data consistency for categories. Library/Method: Vanilla JS.
+        - CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. 
+    -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .card-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+        .no-results {
+            text-align: center;
+            padding: 2rem;
+            font-size: 1.125rem;
+            color: #4b5563;
+        }
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #64748b;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: #fff;
+            padding: 2rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
+            max-width: 90%;
+            max-height: 90%;
+            overflow-y: auto;
+            position: relative;
+        }
+        .modal-close-button {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #64748b;
+        }
+        .comment-section-toggle {
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            font-weight: 500;
+            color: #14b8a6; /* Tailwind teal-500 */
+            margin-top: 1rem;
+        }
+        .comment-section-toggle:hover {
+            color: #0f766e; /* Tailwind teal-700 */
+        }
+        .comment-form-container, .comments-display {
+            display: none; /* Hidden by default, toggled by JS */
+        }
+        .comment-form-container.active, .comments-display.active {
+            display: block;
+        }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-amber-50 text-neutral-800 min-h-screen flex flex-col">
+
+    <header class="bg-teal-700 text-white shadow-md sticky top-0 z-50">
+        <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row justify-between items-center">
+            <h1 class="text-2xl sm:text-3xl font-bold text-center sm:text-left mb-2 sm:mb-0">Guia de Serviços do Condomínio</h1>
+            <button id="addServiceBtn" class="bg-teal-500 hover:bg-teal-600 text-white font-semibold py-2 px-4 rounded-md shadow-md transition duration-300 ease-in-out transform hover:scale-105">
+                Cadastrar Serviço
+            </button>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow">
+        <section id="filters" class="mb-8 p-6 bg-amber-100 rounded-lg shadow">
+            <p class="text-lg font-semibold text-neutral-700 mb-4">Filtros e Pesquisa</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+                <div>
+                    <label for="searchInput" class="block text-sm font-medium text-neutral-700 mb-1">Pesquisar por nome, serviço ou observação:</label>
+                    <input type="text" id="searchInput" placeholder="Ex: João, Encanador, rápido" class="w-full p-3 border border-amber-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500 transition duration-150">
+                </div>
+                <div>
+                    <label for="categoryFilter" class="block text-sm font-medium text-neutral-700 mb-1">Filtrar por Tipo de Serviço:</label>
+                    <select id="categoryFilter" class="w-full p-3 border border-amber-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500 transition duration-150 bg-white">
+                        <option value="">Todas as Categorias</option>
+                    </select>
+                </div>
+            </div>
+        </section>
+
+        <section id="providers-list">
+             <p class="text-xl font-semibold text-neutral-700 mb-6">Prestadores de Serviço Indicados:</p>
+            <div id="providersGrid" class="card-container">
+                </div>
+            <div id="noResultsMessage" class="hidden no-results">
+                <p>Nenhum prestador de serviço encontrado com os filtros aplicados.</p>
+            </div>
+        </section>
+    </main>
+
+    <footer class="bg-teal-800 text-amber-50 py-6 text-center mt-auto">
+        <div class="container mx-auto px-4">
+            <p class="text-sm">&copy; <span id="currentYear"></span> Guia de Serviços do Condomínio. Criado para facilitar a vida dos vizinhos!</p>
+        </div>
+    </footer>
+
+    <div id="addServiceModal" class="modal-overlay hidden">
+        <div class="modal-content w-full md:w-2/3 lg:w-1/2">
+            <button class="modal-close-button" id="closeAddServiceModal">&times;</button>
+            <h2 class="text-2xl font-bold text-teal-700 mb-6">Cadastrar Novo Serviço</h2>
+            <form id="addServiceForm" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label for="newCategoriaSelect" class="block text-sm font-medium text-neutral-700 mb-1">Tipo de Serviço/Categoria <span class="text-red-500">*</span></label>
+                    <select id="newCategoriaSelect" required class="w-full p-2 border border-amber-300 rounded-md bg-white">
+                        <option value="">Selecione uma categoria</option>
+                        <option value="outro">Outro (especificar)</option>
+                    </select>
+                </div>
+                <div id="newCategoryOtherInputContainer" class="hidden">
+                    <label for="newCategoriaOther" class="block text-sm font-medium text-neutral-700 mb-1">Nova Categoria <span class="text-red-500">*</span></label>
+                    <input type="text" id="newCategoriaOther" class="w-full p-2 border border-amber-300 rounded-md" placeholder="Ex: Jardinagem">
+                </div>
+                <div>
+                    <label for="newNome" class="block text-sm font-medium text-neutral-700 mb-1">Nome do Prestador <span class="text-red-500">*</span></label>
+                    <input type="text" id="newNome" required class="w-full p-2 border border-amber-300 rounded-md">
+                </div>
+                <div>
+                    <label for="newTelefone" class="block text-sm font-medium text-neutral-700 mb-1">Telefone <span class="text-red-500">*</span></label>
+                    <input type="text" id="newTelefone" required class="w-full p-2 border border-amber-300 rounded-md" placeholder="(XX) 9XXXX-XXXX">
+                </div>
+                <div>
+                    <label for="newIndicadoPor" class="block text-sm font-medium text-neutral-700 mb-1">Indicado por (Apt.) <span class="text-red-500">*</span></label>
+                    <input type="text" id="newIndicadoPor" required class="w-full p-2 border border-amber-300 rounded-md" placeholder="Ex: Apt. 101">
+                </div>
+                <div>
+                    <label for="newDataIndicacao" class="block text-sm font-medium text-neutral-700 mb-1">Data da Indicação <span class="text-red-500">*</span></label>
+                    <input type="text" id="newDataIndicacao" required readonly class="w-full p-2 border border-amber-300 rounded-md bg-neutral-100 cursor-not-allowed">
+                </div>
+                <div class="sm:col-span-2">
+                    <label for="newObservacoes" class="block text-sm font-medium text-neutral-700 mb-1">Observações/Detalhes</label>
+                    <textarea id="newObservacoes" rows="3" class="w-full p-2 border border-amber-300 rounded-md"></textarea>
+                </div>
+                <div class="sm:col-span-2 flex justify-end mt-4">
+                    <button type="submit" class="bg-teal-600 hover:bg-teal-700 text-white font-semibold py-2 px-6 rounded-md shadow-md transition duration-300">
+                        Salvar Serviço
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="confirmDeleteModal" class="modal-overlay hidden">
+        <div class="modal-content w-full max-w-sm text-center">
+            <button class="modal-close-button" id="closeConfirmDeleteModal">&times;</button>
+            <h2 class="text-xl font-bold text-red-700 mb-4">Confirmar Exclusão</h2>
+            <p class="text-neutral-700 mb-6">Tem certeza que deseja deletar este contato?</p>
+            <div class="flex justify-center gap-4">
+                <button id="cancelDeleteBtn" class="bg-neutral-300 hover:bg-neutral-400 text-neutral-800 font-semibold py-2 px-4 rounded-md transition duration-300">
+                    Cancelar
+                </button>
+                <button id="confirmDeleteBtn" class="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-md transition duration-300">
+                    Deletar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Predefined categories for the comboboxes
+        const initialCategories = [
+            "Encanador",
+            "Eletricista",
+            "Chaveiro",
+            "Diarista",
+            "Manutenção de Ar Cond.",
+            "Pintor",
+            "Marceneiro",
+            "Técnico de Informática",
+            "Jardinagem",
+            "Limpeza de Piscina",
+            "Montador de Móveis",
+            "Desentupidor"
+        ].sort(); // Keep them sorted alphabetically
+
+        let serviceProviders = [
+            {
+                id: 'prov-exemplo',
+                categoria: "Encanador",
+                nome: "EXEMPLO",
+                telefone: "(XX) 9XXXX-XXXX",
+                indicadoPor: "Apt. 999",
+                observacoes: "Este é um contato de exemplo para demonstrar as funcionalidades. Ele pode ser editado ou deletado.",
+                dataIndicacao: "26/05/2025",
+                comments: [
+                    { nomeComentador: "Vizinho Teste", apartamentoComentador: "Apt. 000", comentarioTexto: "Este é um comentário de exemplo para o contato de demonstração.", dataComentario: "26/05/2025" }
+                ]
+            }
+        ];
+
+        const searchInput = document.getElementById('searchInput');
+        const categoryFilter = document.getElementById('categoryFilter');
+        const providersGrid = document.getElementById('providersGrid');
+        const noResultsMessage = document.getElementById('noResultsMessage');
+        document.getElementById('currentYear').textContent = new Date().getFullYear();
+
+        const addServiceBtn = document.getElementById('addServiceBtn');
+        const addServiceModal = document.getElementById('addServiceModal');
+        const closeAddServiceModal = document.getElementById('closeAddServiceModal');
+        const addServiceForm = document.getElementById('addServiceForm');
+        const newDataIndicacaoInput = document.getElementById('newDataIndicacao');
+
+        const newCategoriaSelect = document.getElementById('newCategoriaSelect');
+        const newCategoryOtherInputContainer = document.getElementById('newCategoryOtherInputContainer');
+        const newCategoriaOther = document.getElementById('newCategoriaOther');
+
+        const confirmDeleteModal = document.getElementById('confirmDeleteModal');
+        const closeConfirmDeleteModal = document.getElementById('closeConfirmDeleteModal');
+        const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
+        const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+        let providerToDeleteId = null;
+
+        function displayProviders(providersToDisplay) {
+            providersGrid.innerHTML = '';
+            if (providersToDisplay.length === 0) {
+                noResultsMessage.classList.remove('hidden');
+                providersGrid.classList.add('hidden');
+            } else {
+                noResultsMessage.classList.add('hidden');
+                providersGrid.classList.remove('hidden');
+                providersToDisplay.forEach(provider => {
+                    const card = document.createElement('div');
+                    card.className = 'bg-white p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col relative';
+                    card.setAttribute('data-id', provider.id);
+
+                    const commentsHtml = provider.comments.map(comment => `
+                        <div class="bg-neutral-50 p-2 rounded-md border border-neutral-200 mb-2">
+                            <p class="text-xs text-neutral-600 font-medium">${comment.nomeComentador} (Apt. ${comment.apartamentoComentador}) em ${comment.dataComentario}:</p>
+                            <p class="text-sm text-neutral-700">${comment.comentarioTexto}</p>
+                        </div>
+                    `).join('');
+
+                    card.innerHTML = `
+                        <button class="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white text-xs font-bold p-1 rounded-full w-6 h-6 flex items-center justify-center delete-btn" data-id="${provider.id}" title="Deletar Contato">
+                            &times;
+                        </button>
+                        <h3 class="text-xl font-semibold text-teal-700 mb-2">${provider.nome}</h3>
+                        <p class="text-sm text-neutral-600 mb-1"><strong class="font-medium">Serviço:</strong> ${provider.categoria}</p>
+                        <p class="text-sm text-neutral-600 mb-1"><strong class="font-medium">Telefone:</strong> ${provider.telefone}</p>
+                        <p class="text-sm text-neutral-600 mb-1"><strong class="font-medium">Indicado por:</strong> ${provider.indicadoPor}</p>
+                        <div class="mt-2 mb-3 text-sm text-neutral-600 bg-amber-50 p-3 rounded-md border border-amber-200">
+                            <strong class="font-medium block mb-1">Observações:</strong>
+                            <p class="whitespace-pre-wrap">${provider.observacoes || "Nenhuma observação."}</p>
+                        </div>
+                        <div class="mt-auto pt-3 border-t border-amber-200">
+                            <p class="text-xs text-neutral-500 mb-1">Data da Indicação: ${provider.dataIndicacao}</p>
+                            
+                            <div class="comment-section mt-4">
+                                <button class="comment-section-toggle text-teal-500 hover:text-teal-700 font-medium text-sm flex items-center gap-1">
+                                    Comentários (${provider.comments.length}) <span class="toggle-icon">&#9660;</span>
+                                </button>
+                                <div class="comments-display mt-2 p-2 bg-neutral-100 rounded-md border border-neutral-200">
+                                    ${commentsHtml || '<p class="text-sm text-neutral-500">Nenhum comentário ainda.</p>'}
+                                </div>
+                                <button class="add-comment-btn bg-teal-200 hover:bg-teal-300 text-teal-800 text-xs font-semibold py-1 px-2 rounded-md mt-2">
+                                    Adicionar Comentário
+                                </button>
+                                <form class="comment-form-container mt-2 p-3 bg-teal-50 rounded-md border border-teal-200">
+                                    <h4 class="text-sm font-semibold text-teal-700 mb-2">Novo Comentário:</h4>
+                                    <label for="commenterName-${provider.id}" class="block text-xs font-medium text-neutral-700 mb-1">Seu Nome <span class="text-red-500">*</span></label>
+                                    <input type="text" id="commenterName-${provider.id}" required class="w-full p-1 text-sm border border-neutral-300 rounded-md mb-2">
+                                    
+                                    <label for="commenterApt-${provider.id}" class="block text-xs font-medium text-neutral-700 mb-1">Seu Apartamento <span class="text-red-500">*</span></label>
+                                    <input type="text" id="commenterApt-${provider.id}" required class="w-full p-1 text-sm border border-neutral-300 rounded-md mb-2" placeholder="Ex: Apt. 101">
+
+                                    <label for="commentText-${provider.id}" class="block text-xs font-medium text-neutral-700 mb-1">Comentário <span class="text-red-500">*</span></label>
+                                    <textarea id="commentText-${provider.id}" rows="2" required class="w-full p-1 text-sm border border-neutral-300 rounded-md mb-2"></textarea>
+                                    
+                                    <button type="submit" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold py-1 px-3 rounded-md">
+                                        Salvar Comentário
+                                    </button>
+                                    <button type="button" class="cancel-comment-btn bg-neutral-300 hover:bg-neutral-400 text-neutral-800 text-xs font-semibold py-1 px-3 rounded-md ml-2">
+                                        Cancelar
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    `;
+                    providersGrid.appendChild(card);
+                });
+
+                document.querySelectorAll('.delete-btn').forEach(button => {
+                    button.addEventListener('click', (event) => {
+                        providerToDeleteId = event.target.dataset.id;
+                        confirmDeleteModal.classList.remove('hidden');
+                    });
+                });
+
+                document.querySelectorAll('.comment-section-toggle').forEach(button => {
+                    button.addEventListener('click', (event) => {
+                        const commentsDisplay = event.target.nextElementSibling;
+                        const toggleIcon = event.target.querySelector('.toggle-icon');
+                        commentsDisplay.classList.toggle('active');
+                        if (commentsDisplay.classList.contains('active')) {
+                            toggleIcon.innerHTML = '&#9650;';
+                        } else {
+                            toggleIcon.innerHTML = '&#9660;';
+                        }
+                    });
+                });
+
+                document.querySelectorAll('.add-comment-btn').forEach(button => {
+                    button.addEventListener('click', (event) => {
+                        event.preventDefault();
+                        const formContainer = event.target.nextElementSibling;
+                        formContainer.classList.add('active');
+                        event.target.classList.add('hidden');
+                    });
+                });
+
+                document.querySelectorAll('.cancel-comment-btn').forEach(button => {
+                    button.addEventListener('click', (event) => {
+                        event.preventDefault();
+                        const formContainer = event.target.closest('.comment-form-container');
+                        formContainer.classList.remove('active');
+                        formContainer.reset();
+                        formContainer.previousElementSibling.classList.remove('hidden');
+                    });
+                });
+
+                document.querySelectorAll('.comment-form-container').forEach(form => {
+                    form.addEventListener('submit', (event) => {
+                        event.preventDefault();
+                        const providerId = form.closest('.flex-col').dataset.id;
+                        const provider = serviceProviders.find(p => p.id === providerId);
+
+                        const commenterNameInput = form.querySelector(`input[id="commenterName-${providerId}"]`);
+                        const commenterAptInput = form.querySelector(`input[id="commenterApt-${providerId}"]`);
+                        const commentTextInput = form.querySelector(`textarea[id="commentText-${providerId}"]`);
+
+                        const newComment = {
+                            nomeComentador: commenterNameInput.value,
+                            apartamentoComentador: commenterAptInput.value,
+                            comentarioTexto: commentTextInput.value,
+                            dataComentario: new Date().toLocaleDateString('pt-BR')
+                        };
+
+                        if (provider) {
+                            provider.comments.push(newComment);
+                            filterAndSearchProviders(); // Re-render to show new comment
+                            form.classList.remove('active');
+                            form.reset();
+                            form.previousElementSibling.classList.remove('hidden');
+                        }
+                    });
+                });
+            }
+        }
+
+        function populateCategories() {
+            const currentSelectedCategoryFilter = categoryFilter.value;
+            const currentSelectedNewCategory = newCategoriaSelect.value;
+
+            // Combine initial categories with any dynamically added categories from serviceProviders
+            let allCategories = new Set(initialCategories);
+            serviceProviders.forEach(p => allCategories.add(p.categoria));
+            const sortedCategories = Array.from(allCategories).sort();
+            
+            // Populate main filter dropdown
+            categoryFilter.innerHTML = '<option value="">Todas as Categorias</option>';
+            sortedCategories.forEach(category => {
+                const option = document.createElement('option');
+                option.value = category;
+                option.textContent = category;
+                categoryFilter.appendChild(option);
+            });
+            categoryFilter.value = currentSelectedCategoryFilter;
+
+            // Populate new service category select
+            newCategoriaSelect.innerHTML = '<option value="">Selecione uma categoria</option><option value="outro">Outro (especificar)</option>';
+            sortedCategories.forEach(category => {
+                const option = document.createElement('option');
+                option.value = category;
+                option.textContent = category;
+                newCategoriaSelect.appendChild(option);
+            });
+            newCategoriaSelect.value = currentSelectedNewCategory;
+
+            // Ensure "Outro" input visibility is correct after repopulating
+            if (newCategoriaSelect.value === 'outro') {
+                newCategoryOtherInputContainer.classList.remove('hidden');
+                newCategoriaOther.setAttribute('required', 'true');
+            } else {
+                newCategoryOtherInputContainer.classList.add('hidden');
+                newCategoriaOther.removeAttribute('required');
+                newCategoriaOther.value = '';
+            }
+        }
+
+        function filterAndSearchProviders() {
+            const searchTerm = searchInput.value.toLowerCase().trim();
+            const selectedCategory = categoryFilter.value;
+
+            const filteredProviders = serviceProviders.filter(provider => {
+                const matchesSearch = searchTerm === '' ||
+                    provider.nome.toLowerCase().includes(searchTerm) ||
+                    provider.categoria.toLowerCase().includes(searchTerm) ||
+                    provider.observacoes.toLowerCase().includes(searchTerm) ||
+                    (provider.comments && provider.comments.some(comment => 
+                        comment.comentarioTexto.toLowerCase().includes(searchTerm) ||
+                        comment.nomeComentador.toLowerCase().includes(searchTerm) ||
+                        comment.apartamentoComentador.toLowerCase().includes(searchTerm)
+                    ));
+                
+                const matchesCategory = selectedCategory === '' || provider.categoria === selectedCategory;
+
+                return matchesSearch && matchesCategory;
+            });
+
+            displayProviders(filteredProviders);
+        }
+
+        searchInput.addEventListener('input', filterAndSearchProviders);
+        categoryFilter.addEventListener('change', filterAndSearchProviders);
+
+        addServiceBtn.addEventListener('click', () => {
+            addServiceModal.classList.remove('hidden');
+            addServiceForm.reset();
+            newCategoryOtherInputContainer.classList.add('hidden');
+            newCategoriaOther.removeAttribute('required');
+            populateCategories();
+            newDataIndicacaoInput.value = new Date().toLocaleDateString('pt-BR');
+        });
+        closeAddServiceModal.addEventListener('click', () => {
+            addServiceModal.classList.add('hidden');
+            addServiceForm.reset();
+        });
+        addServiceModal.addEventListener('click', (event) => {
+            if (event.target === addServiceModal) {
+                addServiceModal.classList.add('hidden');
+                addServiceForm.reset();
+            }
+        });
+
+        newCategoriaSelect.addEventListener('change', () => {
+            if (newCategoriaSelect.value === 'outro') {
+                newCategoryOtherInputContainer.classList.remove('hidden');
+                newCategoriaOther.setAttribute('required', 'true');
+            } else {
+                newCategoryOtherInputContainer.classList.add('hidden');
+                newCategoriaOther.removeAttribute('required');
+                newCategoriaOther.value = '';
+            }
+        });
+
+        addServiceForm.addEventListener('submit', (event) => {
+            event.preventDefault();
+            
+            let selectedCategory = newCategoriaSelect.value;
+            if (selectedCategory === 'outro') {
+                selectedCategory = newCategoriaOther.value.trim();
+                if (!selectedCategory) {
+                    alert('Por favor, especifique a nova categoria.');
+                    return;
+                }
+            }
+            if (selectedCategory === '') {
+                 alert('Por favor, selecione ou especifique uma categoria.');
+                 return;
+            }
+
+            const newProvider = {
+                id: 'prov-' + crypto.randomUUID().substring(0, 8), // Generate a simple unique ID
+                categoria: selectedCategory,
+                nome: document.getElementById('newNome').value,
+                telefone: document.getElementById('newTelefone').value,
+                indicadoPor: document.getElementById('newIndicadoPor').value,
+                observacoes: document.getElementById('newObservacoes').value,
+                dataIndicacao: document.getElementById('newDataIndicacao').value,
+                comments: []
+            };
+            serviceProviders.push(newProvider);
+            addServiceModal.classList.add('hidden');
+            addServiceForm.reset();
+            populateCategories();
+            filterAndSearchProviders();
+        });
+
+        closeConfirmDeleteModal.addEventListener('click', () => {
+            confirmDeleteModal.classList.add('hidden');
+            providerToDeleteId = null;
+        });
+        cancelDeleteBtn.addEventListener('click', () => {
+            confirmDeleteModal.classList.add('hidden');
+            providerToDeleteId = null;
+        });
+        confirmDeleteBtn.addEventListener('click', () => {
+            if (providerToDeleteId) {
+                serviceProviders = serviceProviders.filter(p => p.id !== providerToDeleteId);
+                confirmDeleteModal.classList.add('hidden');
+                providerToDeleteId = null;
+                populateCategories();
+                filterAndSearchProviders();
+            }
+        });
+        confirmDeleteModal.addEventListener('click', (event) => {
+            if (event.target === confirmDeleteModal) {
+                confirmDeleteModal.classList.add('hidden');
+                providerToDeleteId = null;
+            }
+        });
+
+        // Initial setup
+        populateCategories();
+        filterAndSearchProviders();
+    </script>
+</body>
+</html>
