@@ -240,9 +240,6 @@
         };
         const initialAuthToken = null; // Mantenha como null para autenticação anônima simples
 
-        // O 'appId' usado no caminho do Firestore deve ser o seu 'projectId'
-        // das suas credenciais do Firebase, pois é ele que identifica seu projeto no Firebase.
-        const appIdForFirestorePath = firebaseConfig.projectId;
 
 
         // Inicialização do Firebase
@@ -314,7 +311,7 @@
                 // corresponde ao que você criou no console do Firebase.
                 // Se o ID do documento intermediário `condo_services_app` ou outros IDs forem auto-gerados,
                 // eles precisam ser os ID's literais no caminho, como você fez.
-                providersCollectionRef = collection(db, `artifacts/BziSyjY1SUimqWzZQm3l/condo_services_app/3qTrxShw2fdI0VpZbknl/public/v5oI3F2gEzUnh2aJ8455/data/5x8rXKVFmzdUc9W4qKYZ/providers`);
+                providersCollectionRef = collection(db, `artifacts/servicos-jardins/providers`);
 
 
                 onAuthStateChanged(auth, async (user) => {
